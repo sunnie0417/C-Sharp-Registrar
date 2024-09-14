@@ -1,0 +1,42 @@
+﻿@namespace StudentTable
+
+<h3>StudentTable</h3>
+
+<table class="table table-striped border border-1">
+    <thead>
+        <tr>
+            <th>Id</th>
+            <th>First Name</th>
+            <th>Last Name</th>
+            <th>Type</th>
+            <th>Action</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var student in Students)
+        {
+            <tr>
+                <td>@student.Id</td>
+                <td>@student.FirstName</td>
+                <td>@student.LastName</td>
+                <td>@student.Type</td>
+                <td>
+                    <button type="button" class="btn btn-link" @onclick="() => OnRegister(student.Id)">Register</button>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@code {
+    [Parameter]
+    public List<Student> Students { get; set; } = new List<Student>();
+
+    [Parameter]
+    public EventCallback<int> Register { get; set; }
+
+    private async Task OnRegister(int studentId)
+    {
+        await Register.InvokeAsync(studentId);
+    }
+}

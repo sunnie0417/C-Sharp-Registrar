@@ -1,0 +1,36 @@
+﻿@page "/"
+@rendermode InteractiveServer
+@inject NavigationManager Navigator
+@inject IConfiguration Config
+@using StudentTable
+
+<PageTitle>Register Home</PageTitle>
+
+<h1 class="display-4 text-center m-5">Students</h1>
+
+<div class="mb-3 text-end">
+    <NavLink class="btn btn-light" href="/add-student">+</NavLink>
+</div>
+
+<StudentTable Students="students" Register="RegisterCourse" />
+
+@code {
+    private List<Student> students = [];
+    private DataService? ds;
+    private void RegisterCourse(int studentId)
+    {
+        Navigator.NavigateTo($"/register-student/{studentId}");
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        ds = new(Config.GetConnectionString("default")!);
+        students = await GetStudentsAsync();
+    }
+
+    private async Task<List<Student>> GetStudentsAsync()
+    {
+        var sql = "SELECT * FROM student";
+        return await ds!.LoadData<Student, dynamic>(sql, new {});
+    }
+}

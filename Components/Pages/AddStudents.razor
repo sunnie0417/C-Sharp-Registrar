@@ -1,0 +1,78 @@
+﻿@page "/add-student"
+@rendermode InteractiveServer
+@inject NavigationManager Navigator
+@inject IConfiguration Config
+
+<h1 class="diplay-4 p-5 text-center">Add Students</h1>
+
+<EditForm class="bg-light p-5 border border-1 mb-5" Model="newStudent" OnValidSubmit="() => AddStudentAsync()"
+    FormName="newStudentForm">
+    <DataAnnotationsValidator />
+    <div class="form-group mb-3">
+        <label class="form-label" for="firstName">First Name</label>
+        <InputText class="form-control" id="firstName" @bind-Value="newStudent.FirstName" />
+        <ValidationMessage For="() => newStudent.FirstName" />
+    </div>
+    <div class="form-group mb-3">
+        <label class="form-label" for="lastName">Last Name</label>
+        <InputText class="form-control" id="lastName" @bind-Value="newStudent.LastName" />
+        <ValidationMessage For="() => newStudent.LastName" />
+    </div>
+    <div class="form-group mb-3">
+        <label class="form-label" for="type">Student Type</label>
+        <InputSelect class="form-select" @bind-Value="newStudent.StudentType">
+            <option value="">Select a Student Type</option>
+            @foreach (var type in studentTypes!)
+            {
+                <option value="@type">@type</option>
+            }
+        </InputSelect>
+        <ValidationMessage For="() => newStudent.StudentType" />
+    </div>
+    <button type="submit" class="btn btn-primary">Add Student</button>
+    <button type="button" class="btn btn-secondary ms-3" @onclick="HandleClick">Cancel</button>
+</EditForm>
+
+@code {
+    private List<string>? studentTypes;
+    private DataService? ds;
+
+    protected override async Task OnInitializedAsync()
+    {
+        ds = new(Config.GetConnectionString("default")!);
+        studentTypes = Helper.GetStudentTypes();
+    }
+
+    private async Task AddStudentAsync()
+    {
+        int id = Student.GenerateRandomId();
+        var sql = "INSERT INTO student (Id, FirstName, LastName, Type) VALUES (@Id, @FirstName, @LastName, @Type)";
+        await ds!.SaveData(sql, new
+        {
+            Id=id,
+            FirstName = newStudent.FirstName,
+            LastName = newStudent.LastName,
+            Type = newStudent.StudentType
+        });
+        Navigator.NavigateTo("/");
+    }
+
+    private void HandleClick()
+    {
+        Navigator.NavigateTo("/");
+    }
+
+    public class StudentsModel
+    {
+        [Required(ErrorMessage = "Please provide a first name")]
+        public string? FirstName { get; set; }
+
+        [Required(ErrorMessage = "Please provide a last name")]
+        public string? LastName { get; set; }
+
+        [Required(ErrorMessage = "Please provide a student type")]
+        public string? StudentType { get; set; }
+    }
+    [SupplyParameterFromForm]
+    private StudentsModel newStudent { get; set; } = new();
+}

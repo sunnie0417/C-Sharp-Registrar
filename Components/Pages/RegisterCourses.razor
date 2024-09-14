@@ -1,0 +1,206 @@
+﻿@page "/register-student/{Id:int}"
+@rendermode InteractiveServer
+@inject NavigationManager Navigator
+@inject IConfiguration Config
+@using Registrar.Models
+
+<h1 class="diplay-4 p-5 text-center">Register Student</h1>
+
+<EditForm Model="Register" FormName="CourseForm" OnValidSubmit="() => SubmitCourses()"
+    class="bg-light p-5 border border-1 mb-5" Enhance>
+    <DataAnnotationsValidator />
+    <CustomValidation @ref="customValidation" />
+    <ValidationSummary />
+    @if (student != null)
+    {
+        <h3 class="display-5">@firstName @lastName - @Id</h3>
+    }
+    <p>The following courses are currently available for registration:</p>
+    @if (success)
+    {
+        <div class="alert alert-success">@successMessage</div>
+    }
+    @if (errorMessages.Any())
+    {
+        <div class="alert alert-danger">
+            @foreach (var errorMessage in errorMessages)
+            {
+                @errorMessage
+            }
+        </div>
+    }
+    @foreach (var course in Register.Courses)
+    {
+        <div class="form-check">
+            <InputCheckbox class="form-check-input" id="@course.Value" @bind-Value="course.IsChecked" />
+            <label class="form-check-label" for="@course.Value">@course.Text</label>
+        </div>
+    }
+    <button type="submit" class="btn btn-primary">Register Student</button>
+    <button type="button" class="btn btn-secondary m-3" @onclick="BackToHome">Cancel</button>
+</EditForm>
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+    private List<Student>? student;
+    private List<Course>? courses;
+    private List<string> errorMessages = new();
+    private List<Registration>? registrations;
+    private DataService? ds;
+    private string? firstName { get; set; }
+    private string? lastName { get; set; }
+    private Student? checkStudentId;
+    private Student? currentStudent;
+
+
+    private class CourseModel
+    {
+        public List<CourseCheckBox> Courses { get; set; } = new();
+    }
+
+    private bool success = false;
+    private string successMessage = "";
+    private int hours;
+
+    [SupplyParameterFromForm]
+    private CourseModel Register { get; set; } = new();
+    private CustomValidation? customValidation;
+
+    protected override async Task OnInitializedAsync()
+    {
+        ds = new(Config.GetConnectionString("default")!);
+        student = await GetstudentInfo(Id);
+        currentStudent = student[0]; // get first student
+
+        if (student != null && student.Count > 0)
+        {
+            firstName = currentStudent.FirstName;
+            lastName = currentStudent.LastName;
+
+            checkStudentId = currentStudent.Id == Id ? currentStudent : null;
+        }
+        else
+        {
+            checkStudentId = null;
+        }
+
+        if (checkStudentId == null)
+        {
+            Navigator.NavigateTo("/");
+            return;
+        }
+
+        courses = await GetCourses();
+        registrations = await GetRegistrations();
+
+        foreach (var course in courses!)
+        {
+            var isChecked = false;
+
+            foreach (var registration in registrations!)
+            {
+                if (registration.CourseId == course.CourseId)
+                {
+                    isChecked = true;
+                    break;
+                }
+            }
+
+            Register.Courses.Add(new CourseCheckBox
+                {
+                    Text = course.ToString(),
+                    Value = course.CourseId,
+                    IsChecked = isChecked,
+                    Hours = course.WeeklyHours
+                });
+        }
+    }
+
+    private async Task SubmitCourses()
+    {
+        errorMessages.Clear();
+        int hours = 0;
+        var selectedCourses = new List<string>();
+
+        var sqlDeleteAll = "DELETE FROM Registration WHERE StudentId = @Id";
+        await ds!.SaveData(sqlDeleteAll, new { Id = Id });
+
+        foreach (var course in Register.Courses)
+        {
+            if (course.IsChecked)
+            {
+                hours = hours + course.Hours;
+                selectedCourses.Add(course.Text);
+            }
+        }
+        ValidateCourses(hours, selectedCourses.Count);
+
+        if (!errorMessages.Any())
+        {
+            foreach (var course in Register.Courses)
+            {
+                if (course.IsChecked)
+                {
+                    var sql = "INSERT IGNORE INTO Registration (StudentId, CourseId) VALUES (@Id, @CourseId)";
+                    await ds!.SaveData(sql, new { Id = Id, CourseId = course.Value });
+                }
+            }
+            success = true;
+            successMessage = $"The student has been registered for {selectedCourses.Count} course(s), {hours} hours weekly.";
+            return;
+        }
+    }
+
+    private void ValidateCourses(int hours, int courseCount)
+    {
+        switch (currentStudent?.Type)
+        {
+            case "Full Time":
+                if (hours > 16)
+                {
+                    success = false;
+                    errorMessages.Add("Full-time students can only register for a maximum of 16 hours per week.");
+                }
+                break;
+            case "Part Time":
+                if (courseCount > 3)
+                {
+                    success = false;
+                    errorMessages.Add("Part-time students can only register for a maximum of 3 courses.");
+                }
+                break;
+            case "Coop":
+                if (courseCount > 2 || hours > 4)
+                {
+                    success = false;
+                    errorMessages.Add("Coop students can only register for a maximum of 2 courses and a maximum of 4 hours per week.");
+                }
+                break;
+        }
+    }
+
+    private void BackToHome()
+    {
+        Navigator.NavigateTo("/");
+    }
+
+    private async Task<List<Student>> GetstudentInfo(int Id)
+    {
+        var sql = "SELECT * FROM student WHERE Id = @Id";
+        return await ds!.LoadData<Student, dynamic>(sql, new { Id = Id });
+    }
+
+    private async Task<List<Course>> GetCourses()
+    {
+        var sql = "SELECT Id AS CourseId, Title, WeeklyHours FROM course";
+        return await ds!.LoadData<Course, dynamic>(sql, new { });
+    }
+
+    private async Task<List<Registration>> GetRegistrations()
+    {
+        var sql = "SELECT * FROM Registration WHERE StudentId = @StudentId";
+        ;
+        return await ds!.LoadData<Registration, dynamic>(sql, new { StudentId = Id });
+    }
+}
